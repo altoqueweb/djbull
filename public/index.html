@@ -287,11 +287,14 @@ function renderMix() {
 // ---------------- Reels ----------------
 let currentTab = 'ig';
 let igCache = null, ttCache = null;
+const REELS_MAX = 3;
 function reelTiles(items, net) {
   if (!items || !items.length) return '';
-  return items.slice(0, 6).map((it, i) => `<a class="reel" href="${esc(safeUrl(it.permalink || it.url))}" target="_blank" rel="noopener" data-track="click_reel" data-label="${net} ${i + 1}">${it.thumbnail ? `<img src="${esc(safeUrl(it.thumbnail))}" alt="" loading="lazy">` : ''}${PLAY}</a>`).join('');
+  const tiles = items.slice(0, REELS_MAX).map((it, i) => `<a class="reel" href="${esc(safeUrl(it.permalink || it.url))}" target="_blank" rel="noopener" data-track="click_reel" data-label="${net} ${i + 1}">${it.thumbnail ? `<img src="${esc(safeUrl(it.thumbnail))}" alt="" loading="lazy">` : ''}${PLAY}</a>`);
+  while (tiles.length < REELS_MAX) tiles.push(`<div class="reel">${PLAY}</div>`);
+  return tiles.join('');
 }
-function placeholderTiles() { return Array.from({ length: 6 }, () => `<div class="reel">${PLAY}</div>`).join(''); }
+function placeholderTiles() { return Array.from({ length: REELS_MAX }, () => `<div class="reel">${PLAY}</div>`).join(''); }
 async function setTab(t) {
   currentTab = t;
   $('tab-ig').setAttribute('aria-pressed', t === 'ig');
@@ -304,24 +307,35 @@ async function setTab(t) {
   if (t === 'ig') {
     if (!igCache) {
       box.innerHTML = placeholderTiles();
-      try { const r = await fetch('/.netlify/functions/instagram'); igCache = r.ok ? (await r.json()).items : []; } catch { igCache = []; }
+      igCache = [];
+      // 1) Reels pegados a mano desde el panel
+      const manual = await manualReels('instagram');
+      if (manual.length) igCache = manual.map((m) => ({ url: m.url, thumbnail: m.thumb_url }));
+      // 2) Si no hay manuales, intenta los automáticos (cuando se conecte Instagram)
+      else { try { const r = await fetch('/.netlify/functions/instagram'); igCache = r.ok ? (await r.json()).items : []; } catch { igCache = []; } }
     }
     if (currentTab === 'ig') box.innerHTML = reelTiles(igCache, 'Instagram') || placeholderTiles();
   } else {
     if (!ttCache) {
       box.innerHTML = placeholderTiles();
-      ttCache = [];
-      if (sb) {
-        const { data } = await sb.from('tiktoks').select('url').order('position').order('created_at', { ascending: false }).limit(6);
-        const urls = (data || []).map((d) => d.url);
-        if (urls.length) {
-          try { const r = await fetch('/.netlify/functions/tiktok?urls=' + encodeURIComponent(urls.join(','))); ttCache = r.ok ? (await r.json()).items : urls.map((url) => ({ url })); }
-          catch { ttCache = urls.map((url) => ({ url })); }
-        }
+      const manual = await manualReels('tiktok');
+      ttCache = manual.map((m) => ({ url: m.url, thumbnail: m.thumb_url }));
+      const missing = ttCache.filter((x) => !x.thumbnail).map((x) => x.url);
+      if (missing.length) {
+        try {
+          const r = await fetch('/.netlify/functions/tiktok?urls=' + encodeURIComponent(missing.join(',')));
+          const auto = r.ok ? (await r.json()).items : [];
+          ttCache.forEach((x) => { if (!x.thumbnail) x.thumbnail = (auto.find((a) => a.url === x.url) || {}).thumbnail || null; });
+        } catch {}
       }
     }
     if (currentTab === 'tt') box.innerHTML = reelTiles(ttCache, 'TikTok') || placeholderTiles();
   }
+}
+async function manualReels(network) {
+  if (!sb) return [];
+  const { data } = await sb.from('reels').select('url,thumb_url').eq('network', network).order('position').order('created_at', { ascending: false }).limit(REELS_MAX);
+  return data || [];
 }
 $('tab-ig').onclick = () => setTab('ig');
 $('tab-tt').onclick = () => setTab('tt');

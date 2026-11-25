@@ -112,7 +112,7 @@
       <button role="tab" data-tab="flyers" aria-selected="false">Flyers</button>
       <button role="tab" data-tab="fechas" aria-selected="false">Fechas</button>
       <button role="tab" data-tab="portada" aria-selected="false">Portada y cifras</button>
-      <button role="tab" data-tab="mix" aria-selected="false">Mix y TikTok</button>
+      <button role="tab" data-tab="mix" aria-selected="false">Mix y reels</button>
     </nav>
 
     <!-- MÉTRICAS -->
@@ -242,14 +242,21 @@
         <p class="msg" id="mix-msg"></p>
       </form>
       <div class="card">
-        <h2>Videos de TikTok</h2>
-        <p class="sub">Pega el link de cada video (máximo 6 se muestran, el más nuevo primero). Los reels de Instagram aparecen solos.</p>
-        <form id="tt-form" class="row">
-          <input class="in" name="url" type="url" required placeholder="https://www.tiktok.com/@djbull.cl/video/…" style="flex:1;min-width:220px" aria-label="Link de TikTok">
-          <button class="btn primary" type="submit">Agregar</button>
+        <h2>Reels de Instagram y TikTok</h2>
+        <p class="sub">Pega el link de cada reel o video. Se muestran 3 por red, ordenados por el número (menor = primero) y luego el más nuevo; los demás quedan guardados pero no se ven. En TikTok la portada sale sola; en Instagram sube una captura del reel como portada (si no, se ve un recuadro con play).</p>
+        <form id="reel-form" class="grid g2">
+          <label class="f">Red<select class="in" name="network" id="reel-net">
+            <option value="instagram">Instagram</option><option value="tiktok">TikTok</option>
+          </select></label>
+          <label class="f">Link del reel<input class="in" name="url" type="url" required placeholder="https://www.instagram.com/reel/…"></label>
+          <label class="f">Portada (opcional)<input class="in" type="file" name="file" accept="image/*" style="padding-top:9px"></label>
+          <div style="display:flex;align-items:flex-end"><button class="btn primary" type="submit" style="width:100%">Agregar reel</button></div>
         </form>
-        <p class="msg" id="tt-msg"></p>
-        <div class="list" id="tiktoks"></div>
+        <p class="msg" id="reel-msg"></p>
+      </div>
+      <div class="card">
+        <h2>Reels publicados</h2>
+        <div class="list" id="reels"></div>
       </div>
     </section>
   </div>
@@ -501,8 +508,16 @@ async function loadMix() {
   const { data } = await sb.from('settings').select('mix_title,mix_url').eq('id', 1).maybeSingle();
   $('mix-form').elements.mix_title.value = data?.mix_title || '';
   $('mix-form').elements.mix_url.value = data?.mix_url || '';
-  const { data: tt } = await sb.from('tiktoks').select('*').order('created_at', { ascending: false });
-  $('tiktoks').innerHTML = (tt || []).length ? tt.map((t) => `<div class="item"><div class="grow" style="word-break:break-all;font-size:13px"><a href="${esc(t.url)}" target="_blank" rel="noopener">${esc(t.url)}</a></div><button class="btn small danger" type="button" data-del-tt="${esc(t.id)}">Quitar</button></div>`).join('') : '<p class="muted" style="margin-top:10px">Aún no hay videos.</p>';
+  loadReels();
+}
+const REEL_RX = { instagram: /^https:\/\/(www\.)?instagram\.com\//i, tiktok: /^https:\/\/(www\.|vm\.|vt\.)?tiktok\.com\//i };
+async function loadReels() {
+  const { data } = await sb.from('reels').select('*').order('network').order('position').order('created_at', { ascending: false });
+  $('reels').innerHTML = (data || []).length ? data.map((r) => `<div class="item">
+    ${r.thumb_url ? `<img class="thumb" src="${esc(r.thumb_url)}" alt="">` : `<div class="thumb" style="display:flex;align-items:center;justify-content:center;color:#777;font-size:11px;text-align:center">sin portada</div>`}
+    <div class="grow"><div class="t">${r.network === 'instagram' ? 'Instagram' : 'TikTok'}</div><div style="word-break:break-all;font-size:13px"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></div></div>
+    <input class="in" type="number" style="height:34px;width:60px;font-size:13px" value="${r.position}" data-reel-pos="${esc(r.id)}" aria-label="Orden">
+    <button class="btn small danger" type="button" data-del-reel="${esc(r.id)}" data-url="${esc(r.thumb_url || '')}">Quitar</button></div>`).join('') : '<p class="muted">Aún no hay reels.</p>';
 }
 $('mix-form').onsubmit = async (e) => {
   e.preventDefault();
@@ -510,17 +525,33 @@ $('mix-form').onsubmit = async (e) => {
   const { error } = await sb.from('settings').update({ mix_title: v.mix_title || null, mix_url: v.mix_url || null }).eq('id', 1);
   error ? say('mix-msg', error.message, false) : say('mix-msg', 'Mix guardado ✓');
 };
-$('tt-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const url = new FormData(e.target).get('url').trim();
-  if (!/^https:\/\/(www\.|vm\.|vt\.)?tiktok\.com\//i.test(url)) return say('tt-msg', 'Ese link no parece de TikTok.', false);
-  const { error } = await sb.from('tiktoks').insert({ url });
-  if (error) return say('tt-msg', error.message, false);
-  e.target.reset(); say('tt-msg', 'Video agregado ✓'); loadMix();
+$('reel-net').onchange = (e) => {
+  e.target.form.elements.url.placeholder = e.target.value === 'instagram' ? 'https://www.instagram.com/reel/…' : 'https://www.tiktok.com/@djbull.cl/video/…';
 };
-$('tiktoks').addEventListener('click', async (e) => {
-  const b = e.target.closest('[data-del-tt]'); if (!b) return;
-  await sb.from('tiktoks').delete().eq('id', b.dataset.delTt); loadMix();
+$('reel-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const network = fd.get('network'), url = fd.get('url').trim(), file = fd.get('file');
+  if (!REEL_RX[network].test(url)) return say('reel-msg', `Ese link no parece de ${network === 'instagram' ? 'Instagram' : 'TikTok'}.`, false);
+  const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    const thumb_url = file && file.size ? await upload(file, 'reels') : null;
+    const { error } = await sb.from('reels').insert({ network, url, thumb_url, position: 0 });
+    if (error) throw error;
+    e.target.reset(); say('reel-msg', 'Reel agregado ✓'); loadReels();
+  } catch (err) { say('reel-msg', 'No se pudo guardar: ' + (err.message || err), false); }
+  btn.disabled = false; btn.textContent = 'Agregar reel';
+};
+$('reels').addEventListener('change', async (e) => {
+  const t = e.target.closest('[data-reel-pos]'); if (!t) return;
+  await sb.from('reels').update({ position: parseInt(t.value, 10) || 0 }).eq('id', t.dataset.reelPos);
+  say('reel-msg', 'Orden guardado ✓');
+});
+$('reels').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-del-reel]'); if (!b || !confirm('¿Quitar este reel de la página?')) return;
+  await sb.from('reels').delete().eq('id', b.dataset.delReel);
+  const p = storagePath(b.dataset.url); if (p) await sb.storage.from('media').remove([p]);
+  loadReels();
 });
 </script>
 </body>
