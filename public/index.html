@@ -141,8 +141,8 @@
   </section>
 
   <section class="section" aria-labelledby="serv-h">
-    <h2 class="h2" id="serv-h">Servicios</h2>
-    <div class="chips hide-scroll" id="chips" role="group" aria-label="Filtrar flyers"></div>
+    <h2 class="h2" id="serv-h">Galería</h2>
+    <div class="chips hide-scroll" id="chips" role="group" aria-label="Flyers o archivos"></div>
     <div class="carousel hide-scroll" id="carousel"></div>
     <p class="note" id="flyer-count"></p>
   </section>
@@ -327,17 +327,19 @@ $('tab-ig').onclick = () => setTab('ig');
 $('tab-tt').onclick = () => setTab('tt');
 
 // ---------------- Flyers ----------------
-const CATS = ['Todos', 'Cumpleaños', 'Empresas', 'Discos', 'Matrimonios'];
-let flyers = [], cat = 'Todos';
+const CATS = ['Flyers', 'Archivos'];
+const CAT_LABEL = { Flyers: 'FLYERS', Archivos: 'ARCHIVOS 📸' };
+let flyers = [], cat = 'Flyers';
 function renderChips() {
-  $('chips').innerHTML = CATS.map((c) => `<button type="button" class="chip" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(c)}</button>`).join('');
+  $('chips').innerHTML = CATS.map((c) => `<button type="button" class="chip" aria-pressed="${c === cat}" data-cat="${esc(c)}">${esc(CAT_LABEL[c])}</button>`).join('');
 }
 function renderFlyers() {
-  const list = cat === 'Todos' ? flyers : flyers.filter((f) => f.category === cat);
-  $('carousel').innerHTML = list.length
-    ? list.map((f) => `<button type="button" class="flyer" data-img="${esc(safeUrl(f.image_url))}" data-title="${esc(f.title || f.category)}" data-track="flyer_open" data-label="${esc(f.title || f.category)}"><img src="${esc(safeUrl(f.image_url))}" alt="${esc(f.title || 'Flyer ' + f.category)}" loading="lazy"><span class="cap"><span class="tag">${esc(f.category)}</span>${f.title ? `<span class="t" style="display:block">${esc(f.title)}</span>` : ''}</span></button>`).join('')
-    : `<p class="empty">Pronto habrá flyers de ${esc(cat.toLowerCase())}.</p>`;
-  $('flyer-count').textContent = list.length ? `Desliza → · ${list.length} ${list.length === 1 ? 'flyer' : 'flyers'}` : '';
+  const list = flyers.filter((f) => f.category === cat);
+  const n = list.length, word = cat === 'Archivos' ? (n === 1 ? 'foto' : 'fotos') : (n === 1 ? 'flyer' : 'flyers');
+  $('carousel').innerHTML = n
+    ? list.map((f) => `<button type="button" class="flyer" data-img="${esc(safeUrl(f.image_url))}" data-title="${esc(f.title || f.category)}" data-track="flyer_open" data-label="${esc((f.title || 'Sin título') + ' · ' + f.category)}"><img src="${esc(safeUrl(f.image_url))}" alt="${esc(f.title || (cat === 'Archivos' ? 'Foto de evento' : 'Flyer'))}" loading="lazy">${f.title ? `<span class="cap"><span class="t" style="display:block">${esc(f.title)}</span></span>` : ''}</button>`).join('')
+    : `<p class="empty">${cat === 'Archivos' ? 'Pronto habrá fotos de sus eventos.' : 'Pronto habrá flyers.'}</p>`;
+  $('flyer-count').textContent = n ? `Desliza → · ${n} ${word}` : '';
   $('carousel').scrollLeft = 0;
 }
 $('chips').addEventListener('click', (e) => {
@@ -358,8 +360,7 @@ async function loadFlyers() {
   renderChips();
   if (!sb) { renderFlyers(); return; }
   const { data } = await sb.from('flyers').select('*').order('position').order('created_at', { ascending: false });
-  const order = { 'Cumpleaños': 0, 'Empresas': 1, 'Discos': 2, 'Matrimonios': 3 };
-  flyers = (data || []).sort((a, b) => (order[a.category] - order[b.category]) || (a.position - b.position));
+  flyers = (data || []).sort((a, b) => (a.position - b.position));
   renderFlyers();
 }
 

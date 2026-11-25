@@ -158,12 +158,12 @@
     <!-- FLYERS -->
     <section data-panel="flyers" hidden>
       <div class="card">
-        <h2>Subir flyer</h2>
-        <p class="sub">Formato vertical tipo historia (9:16) se ve mejor. La imagen se optimiza sola antes de subir.</p>
+        <h2>Subir flyer o foto</h2>
+        <p class="sub">Formato vertical tipo historia (9:16) se ve mejor. Las fotos tocando en eventos van en <b>Archivos 📸</b>. La imagen se optimiza sola antes de subir.</p>
         <form id="flyer-form" class="grid g2">
           <label class="f">Imagen<input class="in" type="file" name="file" accept="image/*" required style="padding-top:9px"></label>
-          <label class="f">Categoría<select class="in" name="category" required>
-            <option>Cumpleaños</option><option>Empresas</option><option selected>Discos</option><option>Matrimonios</option>
+          <label class="f">Sección<select class="in" name="category" required>
+            <option value="Flyers" selected>Flyers</option><option value="Archivos">Archivos 📸 (fotos de eventos)</option>
           </select></label>
           <label class="f">Título (opcional)<input class="in" name="title" maxlength="80" placeholder="Ej: Chinatown · Furia Iquique"></label>
           <div style="display:flex;align-items:flex-end"><button class="btn primary" type="submit" style="width:100%">Subir flyer</button></div>
@@ -171,8 +171,8 @@
         <p class="msg" id="flyer-msg"></p>
       </div>
       <div class="card">
-        <h2>Flyers publicados</h2>
-        <p class="sub">El número define el orden dentro de cada categoría (menor = primero).</p>
+        <h2>Publicados</h2>
+        <p class="sub">El número define el orden dentro de cada sección (menor = primero).</p>
         <div class="flyer-grid" id="flyers"></div>
       </div>
     </section>
@@ -404,7 +404,7 @@ $('bookings').addEventListener('change', async (e) => {
 });
 
 // ---------------- Flyers ----------------
-const CATS = ['Cumpleaños', 'Empresas', 'Discos', 'Matrimonios'];
+const CATS = ['Flyers', 'Archivos'];
 async function loadFlyers() {
   const { data } = await sb.from('flyers').select('*').order('category').order('position').order('created_at', { ascending: false });
   const list = (data || []).sort((a, b) => CATS.indexOf(a.category) - CATS.indexOf(b.category) || a.position - b.position);
